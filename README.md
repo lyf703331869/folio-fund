@@ -22,10 +22,10 @@
   
   ## Application Deployment
   Application is deployed to Heroku:  
-  https://folio-fund.herokuapp.com/
+  https://folio-fund-0dd6e496c353.herokuapp.com/
 
  ## Usage Instruction
-  1. Go to the landing page at https://folio-fund.herokuapp.com/.
+  1. Go to the landing page at https://folio-fund-0dd6e496c353.herokuapp.com/.
   2. For new user, click on Register button on the top right to create an account.
   3. Fill out all of user information on the pop-up form and create account.
   4. Once logged in, user can purchase shares of stocks or funds by entering the ticker and quantity and click the Buy button on the dashboard page.

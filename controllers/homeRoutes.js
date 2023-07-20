@@ -1,7 +1,6 @@
 const router = require('express').Router();
 const { response } = require('express');
-const { quote } = require('yahoo-finance');
-const yahooFinance = require('yahoo-finance');
+const yahooFinance = require('yahoo-finance2').default;
 const { User, Stock } = require('../models');
 const withAuth = require('../utils/auth');
 
@@ -19,107 +18,52 @@ router.get('/about', withAuth, (req, res) => {
   });
 });
 
-router.get('/', (req, res) => {
-  let symbol;
-  let symbols = ['AAPL', 'AMZN', 'GOOG', 'SNAP'];
+router.get('/', async (req, res) => {
   let stocks = [];
-  for (let i = 0; i < symbols.length; i++) {
-    callApi(symbols[i], i);
+  let symbols = ['AAPL', 'AMZN', 'GOOG', 'SNAP'];
+  await Promise.all(symbols.map(async (symbol) => await getInfo(symbol)));
+  async function getInfo(stock) {
+    const quote = await yahooFinance.quote(stock);
+    const price = quote.regularMarketPrice;
+    const rating = quote.averageAnalystRating;
+    stocks.push({ symbol: stock, price: price, rating: rating });
   }
-  function callApi(symbol, i) {
-    yahooFinance.quote(
-      {
-        symbol: symbol,
-        modules: ['financialData'],
-      },
-      function (err, quotes) {
-        if (quotes) {
-          const price = quotes.financialData.currentPrice;
-          const recommendationKey = quotes.financialData.recommendationKey;
-          const ebitda = quotes.financialData.ebitda;
-          stocks.push({ symbol: symbol, price: price, ebitda: ebitda });
-          if (i === symbols.length - 1) {
-            res.render('homepage', {
-              stocks,
-              logged_in: req.session.logged_in,
-            });
-          }
-        } else {
-          return res.status(404).send('Not found');
-        }
-      }
-    );
+  res.render('homepage', {
+    stocks,
+    logged_in: req.session.logged_in,
+  });
+});
+
+router.get('/price', withAuth, async (req, res) => {
+  const symbol = req.query.symbol;
+  const quote = await yahooFinance.quote(symbol);
+  if (quote === undefined) {
+    return res.status(404).send('Not found');
+  } else {
+    res.send({
+      symbol: symbol,
+      price: quote.regularMarketPrice,
+    });
   }
 });
 
-router.get('/price', withAuth, (req, res) => {
+router.get('/status', withAuth, async (req, res) => {
   const symbol = req.query.symbol;
-  if (!symbol) {
+  const quote = await yahooFinance.quote(symbol);
+  if (quote === undefined) {
     return res.status(404).send('Not found');
-  }
-  yahooFinance.quote(
-    {
+  } else {
+    res.send({
       symbol: symbol,
-      modules: ['financialData'],
-    },
-    function (err, quotes) {
-      if (quotes && quotes.financialData && quotes.financialData.currentPrice) {
-        res.send({
-          symbol: symbol,
-          price: quotes.financialData.currentPrice,
-        });
-      } else {
-        return res.status(404).send('Not found');
-      }
-    }
-  );
-});
-
-router.get('/status', withAuth, (req, res) => {
-  const symbol = req.query.symbol;
-  if (!symbol) {
-    return res.status(404).send('Not found');
+    });
   }
-  yahooFinance.quote(
-    {
-      symbol: symbol,
-      modules: ['financialData'],
-    },
-    function (err, quotes) {
-      if (quotes && quotes.financialData) {
-        res.send({
-          symbol: symbol,
-        });
-      } else {
-        return res.status(404).send('Not found');
-      }
-    }
-  );
 });
 
 const addPriceToStock = async (stock) => {
-  const updatedStock = await new Promise((resolve, reject) => {
-    yahooFinance.quote(
-      {
-        symbol: stock.symbol,
-        modules: ['financialData'],
-      },
-      function (err, quotes) {
-        if (
-          quotes &&
-          quotes.financialData &&
-          quotes.financialData.currentPrice
-        ) {
-          stock.price = quotes.financialData.currentPrice;
-          stock.total = round(quotes.financialData.currentPrice * stock.shares);
-          resolve(stock);
-        } else {
-          reject('stock not found');
-        }
-      }
-    );
-  });
-  return await updatedStock;
+  const quote = await yahooFinance.quote(stock.symbol);
+  stock.price = quote.regularMarketPrice;
+  stock.total = (quote.regularMarketPrice * stock.shares).toFixed(2);
+  return stock;
 };
 
 router.get('/dashboard', withAuth, async (req, res) => {
@@ -151,9 +95,5 @@ router.get('/register', (req, res) => {
 
   res.render('register');
 });
-
-function round(value) {
-  return Math.round(value * 100) / 100;
-}
 
 module.exports = router;
